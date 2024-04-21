@@ -49,7 +49,7 @@ const userSchema = new Schema({
 },{timestamps:true});
 
 userSchema.pre("save",async function(next){ // function use beacuse arrow does not provide refference 
-    if(!this.isModified("password") ) next(); // beacuase pre is middlelware
+    if(!this.isModified("password") ) next(); // beacuase pre is middlelware so add next() function 
 
     this.password = await bcrypt.hash(this.password,9);
     console.log("password saved successfully");
@@ -74,7 +74,6 @@ userSchema.methods.generateAccess = function(){
 )
 }
 
-
 userSchema.pre("save",async function(next){
     if(!this.isModified("refreshToken")) next();
 
@@ -91,5 +90,6 @@ userSchema.methods.generateRefresh = function(){
     }
 )
 }
+
 
 export const User = model("User",userSchema);
