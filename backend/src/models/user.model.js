@@ -37,7 +37,6 @@ const userSchema = new Schema({
     },
     refreshToken:{
         type:String,
-        required:true
     },
     watchHistory:[
         {
@@ -52,12 +51,19 @@ userSchema.pre("save",async function(next){ // function use beacuse arrow does n
     if(!this.isModified("password") ) next(); // beacuase pre is middlelware so add next() function 
 
     this.password = await bcrypt.hash(this.password,9);
-    console.log("password saved successfully");
+    //console.log("password saved successfully");
+    next();
+})
+
+userSchema.pre("save",async function(next){
+    if(!this.isModified("refreshToken")) next();
+
+    this.refreshToken = this.generateRefresh();
     next();
 })
 
 userSchema.methods.isPasswordCorrect = async function(password){
-    return await bcrypt.compare(password,this.password);
+   return await bcrypt.compare(password,this.password)
 }
 
 userSchema.methods.generateAccess = function(){
@@ -74,12 +80,7 @@ userSchema.methods.generateAccess = function(){
 )
 }
 
-userSchema.pre("save",async function(next){
-    if(!this.isModified("refreshToken")) next();
 
-    this.refreshToken = this.generateRefresh();
-    next();
-})
 userSchema.methods.generateRefresh = function(){
     return jwt.sign({
         _id:this._id,
