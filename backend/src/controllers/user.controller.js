@@ -1,8 +1,10 @@
 import {asyncHandler} from "../utils/AsyncHandler.js";
 import {ApiError} from "../utils/ApiError.js";
 import {User} from "../models/user.model.js";
-import {uploadOnCloudinary} from "../utils/cloudinary.js";
+import {destroyOnCloudinary, uploadOnCloudinary} from "../utils/cloudinary.js";
 import {ApiResponse} from "../utils/ApiResponse.js"
+import jwt from "jsonwebtoken";
+import { encrypt,dcrypt } from "../utils/Crypto.js";
 
 // -- -- -- -- -- -- -- -- REFRESH AND ACCESS TOKEN GENERATOR -- -- -- -- -- -- -- --
 const generateRefreshAndRefreshToken = async(userId)=>{
@@ -51,13 +53,15 @@ const registerUser = asyncHandler(async (req,res)=>{
         throw new ApiError(501,"Faild to Uplaod Files on Cloud");
     }
 
+    const avatarPK =await encrypt(avatar.public_id);
+    const coverImagePK =await encrypt(coverImage.public_id);
     const newUser = await User.create({
         userName:userName.toLowerCase().trim(),
         fullName:fullName,
         email,
         password,
-        avatar:avatar.url,
-        coverImage:coverImage.url
+        avatar:[avatar.url,avatarPK],
+        coverImage:[coverImage.url,coverImagePK]
     });
 
     const createdUser = await User.findById(newUser._id).select("-password -refreshToken");
@@ -117,6 +121,36 @@ const loginUser = asyncHandler(async (req,res)=>{
 
 })
 
+// -- -- -- -- -- -- -- -- LOGGED OUT USER-- -- -- -- -- -- -- --
+const loggedOut = asyncHandler(async (req,res)=>{
+    try{
+        const user =await User.findByIdAndUpdate(req.user?._id,{
+            $unset:{
+                refreshToken:1 // make the field to unset 
+            }
+        },
+        {
+            new:true
+        }
+    );
+    if(!user){
+        throw new ApiError(501,"fialed to logout")
+    }
+    const options={
+        httpOnly:true,
+        secure:true
+    }
+
+    return res.status(200)
+    .clearCookie("accessToken",options)
+    .clearCookie("refreshToken",options)
+    .json(new ApiResponse(200,{},"User Log out SuccessFully."))
+    }
+    catch(err){
+        throw new ApiError(501,"fialed to logout")
+    }
+})
+
 // -- -- -- -- -- -- -- -- GET SINGLE USER DATA -- -- -- -- -- -- -- --
 
 const getSingleUser = asyncHandler(async (req,res)=>{
@@ -127,6 +161,31 @@ const getSingleUser = asyncHandler(async (req,res)=>{
     }
 
     res.status(200).json(new ApiResponse(200,user,"data fetch successfully."))
+})
+
+// -- -- -- -- -- -- -- -- GENERATE NEW REFRESH TOKENS -- -- -- -- -- -- -- --
+
+const genNewToken = asyncHandler(async (req,res)=>{
+    const user = await User.findById(req?.user?._id).select("-password");
+    //console.log(user);
+    if(!user){
+        throw new ApiError(501,`user not found!|| genNT!!!`)
+    }
+
+    const isRefreshToken = jwt.verify(req?.cookies?.refreshToken, process.env.REFRESH_TOKEN_SECRET);
+    
+    if(!isRefreshToken){
+        throw new ApiError(400,`refresh token does not match!`);
+    }
+    const options = {
+        httpOnly:true,
+        secure:true
+    }
+    const {accessToken} =await generateRefreshAndRefreshToken(user._id);
+    
+    res.status(200)
+    .cookie("accessToken",accessToken,options)
+    .json(new ApiResponse(200,{},"tokens genrated successfully."))
 })
 
 // -- -- -- -- -- -- -- -- UPDATE PASSWORD-- -- -- -- -- -- -- --
@@ -159,32 +218,177 @@ const  updatePassword = asyncHandler(async (req,res)=>{
     }
 })
 
-const loggedOut = asyncHandler(async (req,res)=>{
+// -- -- -- -- -- -- -- -- UPDATE USER-- -- -- -- -- -- -- --
+
+const updateUser = asyncHandler(async (req,res)=>{
+
     try{
-        const user =await User.findByIdAndUpdate(req.user?._id,{
-            $unset:{
-                refreshToken:1 // make the field to unset 
-            }
-        },
-        {
-            new:true
-        }
-    );
-    if(!user){
-        throw new ApiError(501,"fialed to logout")
-    }
-    const options={
-        httpOnly:true,
-        secure:true
+        const {userName, email,fullName} = req.body;
+
+    if([userName,email,fullName].some((fields)=> (fields?.trim() == "")))
+    {
+        throw new ApiError(405,"Values must be provided")
     }
 
-    return res.status(200)
-    .clearCookie("accessToken",options)
-    .clearCookie("refreshToken",options)
-    .json(new ApiResponse(200,{},"User Log out SuccessFully."))
+    //console.log(userName,email,fullName);
+
+    const user = await User.findById(req.user._id);
+    if(!user){
+        throw new ApiError(404,"User Not Found!")
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(user._id,{
+        userName,
+        email,
+        fullName
+    },{
+        new:true
+    })
+
+    if(!updatedUser){
+        throw new ApiError(504,"Failed To Update")
+    }
+
+    res.status(200)
+    .json(new ApiResponse(200,{},"user details updated successfully."))
     }
     catch(err){
-        throw new ApiError(501,"fialed to logout")
+        throw new ApiError(400,"something went wrong with update User")
+    }
+    
+})
+
+// -- -- -- -- -- -- -- -- UPDATE COVER-IMAGE-- -- -- -- -- -- -- --
+
+const updateCoverImage = asyncHandler(async (req,res)=>{
+    
+    try{
+        const localPath = req?.file?.path;
+        
+        if(!localPath){
+            throw new ApiError(404,"please provide file for cover-image");
+        }
+        
+        const coverImage = await uploadOnCloudinary(localPath);
+        if(!coverImage){
+            throw new ApiError(505,"something went wrong {cover-Image}!!!");
+        }
+        const user =await User.findOne(req?.user?._id);
+        //console.log(user);
+        if(!user){
+            throw new ApiError(500,"User Not Found");
+        }
+        const userPrevPK = user.coverImage[1];
+        //console.log(userPrevPK);
+        const coverImagePK =encrypt(coverImage.public_id)
+        //console.log(coverImagePK);
+        const ImageUpdated = await User.findByIdAndUpdate(user._id,{
+            coverImage:[coverImage.url,coverImagePK]
+        },{
+            new:true
+        })
+
+        if(!ImageUpdated){
+            throw new ApiError(505,"something went wrong with image update!!!");
+        }
+        await destroyOnCloudinary(dcrypt(userPrevPK));
+       
+        res.status(200)
+        .json(new ApiResponse(200,{},"Cover Image updated Successfully."))
+    }catch(err){
+        throw new ApiError(501,"cannot update cover-Image!!!")
+    }
+})
+
+// -- -- -- -- -- -- -- -- UPDATE AVATAR-- -- -- -- -- -- -- --
+const updateAvatar = asyncHandler(async (req,res)=>{
+    
+    try{
+        const localPath = req?.file?.path;
+        
+        if(!localPath){
+            throw new ApiError(404,"please provide file for cover-image");
+        }
+        
+        const avatar = await uploadOnCloudinary(localPath);
+        if(!avatar){
+            throw new ApiError(505,"something went wrong {cover-Image}!!!");
+        }
+        const user =await User.findOne(req?.user?._id);
+        //console.log(user);
+        if(!user){
+            throw new ApiError(500,"User Not Found");
+        }
+        const userPrevPK = user.avatar[1];
+        //console.log(userPrevPK);
+        const avatarPK =encrypt(avatar.public_id)
+        //console.log(coverImagePK);
+        const ImageUpdated = await User.findByIdAndUpdate(user._id,{
+            avatar:[coverImage.url,avatarPK]
+        },{
+            new:true
+        })
+
+        if(!ImageUpdated){
+            throw new ApiError(505,"something went wrong with image update!!!");
+        }
+        await destroyOnCloudinary(dcrypt(userPrevPK));
+       
+        res.status(200)
+        .json(new ApiResponse(200,{},"Avatar updated Successfully."))
+    }catch(err){
+        throw new ApiError(501,"cannot update Avatar!!!")
+    }
+})
+
+// -- -- -- -- -- -- -- -- DELETE USER-- -- -- -- -- -- -- --
+const deleteUser = asyncHandler(async (req,res)=>{
+    try{
+        const {password} = req.body;
+        
+        if(!password){
+            throw new ApiError(404,"PLEASE ENTER PASSWORD!!!")
+        }
+        //console.log(req.user);
+        const user = await User.findOne(req.user?._id);
+        //console.log(user);
+        if(!user){
+            throw new ApiError(505,"User Not Found!!!")
+        }
+        
+        const isPasswordValid = await user.isPasswordCorrect(password);
+        //console.log(isPasswordValid, "\n");
+        if(!isPasswordValid){
+            throw new ApiError(400,"PASSWORD DOES NOT MATCH!!!")
+        }
+
+        const {avatar,coverImage} = user;
+       
+        try{
+            await destroyOnCloudinary(dcrypt(avatar[1]))
+            await destroyOnCloudinary(dcrypt(coverImage[1]))
+        }catch(err){
+            console.log("ERROR IN DELETE RESOURSE,",err.message);
+        }
+        
+
+        const userDeleted = await User.findByIdAndDelete(user?._id);
+        
+        if(!userDeleted){
+            throw new ApiError(505,"SOMETHING WENT WRONG WHILE DELETING USER!!!")
+        }
+        const options = {
+            httpOnly:true,
+            secure:true
+        }
+
+        res.status(200)
+        .clearCookie("accessToken", options)
+        .clearCookie("refreshToken", options)
+        .json(new ApiResponse(200,{},"User Deleted successfully!!!"))
+
+    }catch(err){
+        throw new ApiError(500,"Encounter Error, while deleting user!!!")
     }
 })
 export {
@@ -192,5 +396,10 @@ export {
     loginUser,
     getSingleUser,
     updatePassword,
-    loggedOut
+    loggedOut,
+    genNewToken,
+    updateUser,
+    updateCoverImage,
+    updateAvatar,
+    deleteUser
 }

@@ -24,13 +24,15 @@ const userSchema = new Schema({
         trim:true,
         index:true
     },
-    avatar:{
+    avatar:[
+        {
+            type:String,
+            required:true
+        }
+    ],
+    coverImage:[{
         type:String,
-        required:true
-    },
-    coverImage:{
-        type:String,
-    },
+    }],
     password:{
         type:String,
         required:true
@@ -55,12 +57,14 @@ userSchema.pre("save",async function(next){ // function use beacuse arrow does n
     next();
 })
 
+
 userSchema.pre("save",async function(next){
     if(!this.isModified("refreshToken")) next();
 
     this.refreshToken = this.generateRefresh();
     next();
 })
+
 
 userSchema.methods.isPasswordCorrect = async function(password){
    return await bcrypt.compare(password,this.password)

@@ -1,9 +1,21 @@
 import {Router} from "express";
-import { getSingleUser, loggedOut, loginUser, registerUser, updatePassword } from "../controllers/user.controller.js";
+import { 
+    getSingleUser,
+    loggedOut,
+    loginUser, 
+    registerUser, 
+    updatePassword,
+    genNewToken,
+    updateUser,
+    updateCoverImage,
+    updateAvatar,
+    deleteUser
+} from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middieware.js";
 import { verifyJWT } from "../controllers/auth.controller.js";
 const router =Router();
 
+// POST METHODS
 router.route('/register').post(
     upload.fields([
         {
@@ -19,9 +31,17 @@ router.route('/register').post(
 router.route('/login').post(loginUser)
 router.use(verifyJWT); // middleware will checking for all after this line
 
-router.route('/get-details').get(getSingleUser);
-
-router.route('/change-password').post(updatePassword);
+// GET METHODS
+router.route('/getCurrentUser').get(getSingleUser);
 router.route('/logout').get(loggedOut);
+router.route('/regen-tokens').get(genNewToken);
 
+//PATCH METHODS
+router.route('/change-password').patch(updatePassword);
+router.route('/update-user-details').patch(updateUser);
+router.route('/update-user-cover').patch(upload.single("avatar"),updateAvatar);
+router.route('/update-user-coverImage').patch(upload.single("coverImage"),updateCoverImage);
+
+// DELETE METHODS
+router.route('/deleteUser').delete(deleteUser);
 export default router;
