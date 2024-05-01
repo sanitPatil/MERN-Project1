@@ -31,5 +31,10 @@ app.use('/user',userRouter)
 // -- --- --- -- -- -- -- VIDEO ROUTER -- -- -- -- -- -- --
 import videoRouter from "./routers/video.router.js";
 
+
 app.use('/user/account',videoRouter) // http://localhost:5000/user/account/
+
+// -- --- --- -- -- -- -- HEALTH-CHECK-UP ROUTER -- -- -- -- -- -- --
+import healthRouter from "./routers/health.router.js"
+app.use('/user/account',healthRouter)
 export {app}
