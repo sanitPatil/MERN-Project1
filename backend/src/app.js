@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 
-
 const app = express();
 
 app.use(cors({
@@ -28,4 +27,9 @@ app.use(express.static("public"));
 import userRouter from "./routers/user.router.js";
 
 app.use('/user',userRouter)
+
+// -- --- --- -- -- -- -- VIDEO ROUTER -- -- -- -- -- -- --
+import videoRouter from "./routers/video.router.js";
+
+app.use('/user/account',videoRouter) // http://localhost:5000/user/account/
 export {app}

@@ -2,14 +2,14 @@ import mongoose,{Schema,model} from "mongoose";
 import mongooseAV2 from "mongoose-aggregate-paginate-v2";
 
 const videoSchema = new Schema({
-    videoFile:{
+    videoFile:[{
         type:String,
         required:true
-    },
-    thumbnail:{
+    }],
+    thumbnail:[{
         type:String,
         required:true
-    },
+    }],
     title:{
         type:String,
         required:true
@@ -34,7 +34,7 @@ const videoSchema = new Schema({
         type:Schema.Types.ObjectId,
         ref:"User"
     }
-
+    
 },{timestamps:true})
 
 videoSchema.plugin(mongooseAV2)

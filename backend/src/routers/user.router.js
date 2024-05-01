@@ -9,7 +9,8 @@ import {
     updateUser,
     updateCoverImage,
     updateAvatar,
-    deleteUser
+    deleteUser,
+    getUserChannelProfile
 } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middieware.js";
 import { verifyJWT } from "../controllers/auth.controller.js";
@@ -35,7 +36,7 @@ router.use(verifyJWT); // middleware will checking for all after this line
 router.route('/getCurrentUser').get(getSingleUser);
 router.route('/logout').get(loggedOut);
 router.route('/regen-tokens').get(genNewToken);
-
+router.route('/channel-profile/:username').get(getUserChannelProfile)
 //PATCH METHODS
 router.route('/change-password').patch(updatePassword);
 router.route('/update-user-details').patch(updateUser);

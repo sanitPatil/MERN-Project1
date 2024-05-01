@@ -8,7 +8,7 @@ import { encrypt,dcrypt } from "../utils/Crypto.js";
 
 // -- -- -- -- -- -- -- -- REFRESH AND ACCESS TOKEN GENERATOR -- -- -- -- -- -- -- --
 const generateRefreshAndRefreshToken = async(userId)=>{
-    try{
+   
         const user = await User.findById(userId);
         const accessToken = user.generateAccess();
         const refreshToken = user.generateRefresh();
@@ -16,9 +16,6 @@ const generateRefreshAndRefreshToken = async(userId)=>{
         await user.save({validateBeforeSave:false});
         //console.log(accessToken,refreshToken);
         return({accessToken,refreshToken})
-    }catch(err){
-        throw new ApiError(501,"Error while generating Refresh And Access Token")
-    }
 }
 
 // -- -- -- -- -- -- -- -- REGISTER USER -- -- -- -- -- -- -- --
@@ -123,7 +120,7 @@ const loginUser = asyncHandler(async (req,res)=>{
 
 // -- -- -- -- -- -- -- -- LOGGED OUT USER-- -- -- -- -- -- -- --
 const loggedOut = asyncHandler(async (req,res)=>{
-    try{
+    
         const user =await User.findByIdAndUpdate(req.user?._id,{
             $unset:{
                 refreshToken:1 // make the field to unset 
@@ -145,10 +142,6 @@ const loggedOut = asyncHandler(async (req,res)=>{
     .clearCookie("accessToken",options)
     .clearCookie("refreshToken",options)
     .json(new ApiResponse(200,{},"User Log out SuccessFully."))
-    }
-    catch(err){
-        throw new ApiError(501,"fialed to logout")
-    }
 })
 
 // -- -- -- -- -- -- -- -- GET SINGLE USER DATA -- -- -- -- -- -- -- --
@@ -191,7 +184,7 @@ const genNewToken = asyncHandler(async (req,res)=>{
 // -- -- -- -- -- -- -- -- UPDATE PASSWORD-- -- -- -- -- -- -- --
 
 const  updatePassword = asyncHandler(async (req,res)=>{
-    try{
+    
         const {oldPassword,newPassword} = req.body;
         const user =await User.findById(req.user?._id);
         if(!user){
@@ -211,19 +204,13 @@ const  updatePassword = asyncHandler(async (req,res)=>{
 
         res.status(200)
         .json(new ApiResponse(200,{},"Password changed SuccessFully."))
-
-
-    }catch(err){
-        console.log(`ERROR IN UPDATE PASSWORD!!!`);
-    }
 })
 
 // -- -- -- -- -- -- -- -- UPDATE USER-- -- -- -- -- -- -- --
 
 const updateUser = asyncHandler(async (req,res)=>{
-
-    try{
-        const {userName, email,fullName} = req.body;
+    
+    const {userName, email,fullName} = req.body;
 
     if([userName,email,fullName].some((fields)=> (fields?.trim() == "")))
     {
@@ -251,10 +238,7 @@ const updateUser = asyncHandler(async (req,res)=>{
 
     res.status(200)
     .json(new ApiResponse(200,{},"user details updated successfully."))
-    }
-    catch(err){
-        throw new ApiError(400,"something went wrong with update User")
-    }
+    
     
 })
 
@@ -262,7 +246,6 @@ const updateUser = asyncHandler(async (req,res)=>{
 
 const updateCoverImage = asyncHandler(async (req,res)=>{
     
-    try{
         const localPath = req?.file?.path;
         
         if(!localPath){
@@ -295,15 +278,11 @@ const updateCoverImage = asyncHandler(async (req,res)=>{
        
         res.status(200)
         .json(new ApiResponse(200,{},"Cover Image updated Successfully."))
-    }catch(err){
-        throw new ApiError(501,"cannot update cover-Image!!!")
-    }
 })
 
 // -- -- -- -- -- -- -- -- UPDATE AVATAR-- -- -- -- -- -- -- --
 const updateAvatar = asyncHandler(async (req,res)=>{
     
-    try{
         const localPath = req?.file?.path;
         
         if(!localPath){
@@ -336,16 +315,11 @@ const updateAvatar = asyncHandler(async (req,res)=>{
        
         res.status(200)
         .json(new ApiResponse(200,{},"Avatar updated Successfully."))
-    }catch(err){
-        throw new ApiError(501,"cannot update Avatar!!!")
-    }
 })
 
 // -- -- -- -- -- -- -- -- DELETE USER-- -- -- -- -- -- -- --
 const deleteUser = asyncHandler(async (req,res)=>{
-    try{
         const {password} = req.body;
-        
         if(!password){
             throw new ApiError(404,"PLEASE ENTER PASSWORD!!!")
         }
@@ -355,24 +329,15 @@ const deleteUser = asyncHandler(async (req,res)=>{
         if(!user){
             throw new ApiError(505,"User Not Found!!!")
         }
-        
         const isPasswordValid = await user.isPasswordCorrect(password);
         //console.log(isPasswordValid, "\n");
         if(!isPasswordValid){
             throw new ApiError(400,"PASSWORD DOES NOT MATCH!!!")
         }
-
         const {avatar,coverImage} = user;
-       
-        try{
-            await destroyOnCloudinary(dcrypt(avatar[1]))
-            await destroyOnCloudinary(dcrypt(coverImage[1]))
-        }catch(err){
-            console.log("ERROR IN DELETE RESOURSE,",err.message);
-        }
-        
-
-        const userDeleted = await User.findByIdAndDelete(user?._id);
+        await destroyOnCloudinary(dcrypt(avatar[1]))
+        await destroyOnCloudinary(dcrypt(coverImage[1]))
+       const userDeleted = await User.findByIdAndDelete(user?._id);
         
         if(!userDeleted){
             throw new ApiError(505,"SOMETHING WENT WRONG WHILE DELETING USER!!!")
@@ -386,10 +351,71 @@ const deleteUser = asyncHandler(async (req,res)=>{
         .clearCookie("accessToken", options)
         .clearCookie("refreshToken", options)
         .json(new ApiResponse(200,{},"User Deleted successfully!!!"))
+})
 
-    }catch(err){
-        throw new ApiError(500,"Encounter Error, while deleting user!!!")
+const getUserChannelProfile = asyncHandler(async (req,res)=>{
+    const {username} = req.params;
+    //console.log(username);
+    if(!username){
+        throw new ApiError(400,"username must be provided!!")
     }
+
+    const channel = await User.aggregate([
+        {
+            $match:{
+                userName:username.toLowerCase()
+            }
+        },
+        {
+            $lookup:{
+                from:"subscriptions",
+                localField:"_id",
+                foreignField:"subscriber",
+                as:"subscribers"
+            }
+        },
+        {
+            $lookup:{
+                from:"subscriptions",
+                localField:"_id",
+                foreignField:"channel",
+                as:"subscribedTo"
+            }
+        },
+        {
+            $addFields:{
+                subscriberCount:{
+                    $size:"$subscribers"
+                },
+                channelSubscribedToCount:{
+                    $size:"$subscribedTo"
+                },
+                isPublished:{
+                    $cond:{
+                        if:{$in:[req.user?._id,"$subscribers.subscriber"]},
+                        then:true,
+                        else:false
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                fullName: 1,
+                userName: 1,
+                subscribersCount: 1,
+                channelsSubscribedToCount: 1,
+                isSubscribed: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1
+            }
+        }
+        
+    ])
+    //console.log(channel);
+    res.status(200)
+    .json(new ApiResponse(200,channel,"successfully get channel data"))
 })
 export {
     registerUser,
@@ -401,5 +427,6 @@ export {
     updateUser,
     updateCoverImage,
     updateAvatar,
-    deleteUser
+    deleteUser,
+    getUserChannelProfile
 }

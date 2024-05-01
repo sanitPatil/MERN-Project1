@@ -1,6 +1,7 @@
 import {v2 as cloudinary} from 'cloudinary';
 import fs from "fs";
 import dotenv from "dotenv";
+import { ApiError } from './ApiError.js';
 dotenv.config();
 
 cloudinary.config({ 
@@ -10,10 +11,11 @@ cloudinary.config({
 });
 
 const uploadOnCloudinary = async (localFilePath) =>{
+  
     try{
         if(!localFilePath) return null;
         const response = await cloudinary.uploader.upload(localFilePath,{
-            resource_type:"auto",
+            resource_type:"auto"
         })
 
         console.log(`File Upload On Cloudinary successfully` );
@@ -26,21 +28,15 @@ const uploadOnCloudinary = async (localFilePath) =>{
     }
 }
 
-const destroyOnCloudinary = async (localFilePath) =>{
-    try{
-        await cloudinary.uploader.destroy(localFilePath, function(error, result) {
-            if (error) {
-              console.error(error);
-            } else {
-              console.log(result);
-            }
-          });      
-          
-    }catch(err){
-        console.log("file destroy unsuccessfull!!!");
-    }
-}
+const destroyOnCloudinary = async (public_key,format="image") => {
+      //console.log(public_key);
+      const result = await cloudinary.uploader.destroy(public_key,{resource_type:format});
+      console.log(result);
+      return result;
+
+}   
 export {
     uploadOnCloudinary,
     destroyOnCloudinary
 }
+
